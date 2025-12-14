@@ -1,14 +1,3 @@
-/*
- * DASAI MOCHI EYES V43 - TRULY ALIVE & UNLOCKED AI
- * ------------------------------------------------
- * Hardware: ESP32-C6 + SSD1306 (128x64 I2C)
- *
- * FIX V43:
- * - IA DESBLOQUEADA: El bicho vive (parpadea, mira) aunque no haya BT.
- * - SECUENCIAS REVISADAS: Broma, Detective, Estornudo funcionando.
- * - TODOS LOS COMANDOS ACTIVOS.
- */
-
 #include <Arduino.h>
 #include <Wire.h>
 #include <U8g2lib.h>
