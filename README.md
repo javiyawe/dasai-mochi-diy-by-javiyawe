@@ -114,15 +114,15 @@ Pasos:
 1. Abre una app de terminal Bluetooth  
    (ej: *Serial Bluetooth Terminal*)
    
-3. Conecta a:
+2. Conecta a:
 MOCHI_YAWE_V43
 
-4. Mochi muestra 🔒 (bloqueado)
-5. 
-6. Desbloquea:
+3. Mochi muestra 🔒 (bloqueado)
+
+4. Desbloquea:
 PASS:1234
 
-7. Configura WiFi:
+5. Configura WiFi:
 wifi:NombreDeTuRed,TuContraseña
 
 Mochi guarda los datos, se reinicia y, si todo va bien, muestra **ciudad y temperatura**.
