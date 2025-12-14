@@ -91,9 +91,6 @@ Para que el código quepa:
 - **Partition Scheme:**
 Huge APP (3MB No OTA / 1MB SPIFFS)
 
-yaml
-Copiar código
-
 Si no haces esto → **no compila**.
 
 ---
@@ -102,9 +99,6 @@ Si no haces esto → **no compila**.
 Carga el archivo:
 
 DasaiEyes_V43_TrulyAlive.ino
-
-yaml
-Copiar código
 
 ---
 
@@ -119,22 +113,17 @@ Pasos:
 
 1. Abre una app de terminal Bluetooth  
    (ej: *Serial Bluetooth Terminal*)
-2. Conecta a:
+   
+3. Conecta a:
 MOCHI_YAWE_V43
 
-markdown
-Copiar código
-3. Mochi muestra 🔒 (bloqueado)
-4. Desbloquea:
+4. Mochi muestra 🔒 (bloqueado)
+5. 
+6. Desbloquea:
 PASS:1234
 
-arduino
-Copiar código
-5. Configura WiFi:
+7. Configura WiFi:
 wifi:NombreDeTuRed,TuContraseña
-
-markdown
-Copiar código
 
 Mochi guarda los datos, se reinicia y, si todo va bien, muestra **ciudad y temperatura**.
 
@@ -197,9 +186,6 @@ Fuerzan una emoción temporal y luego vuelven a automático.
 Ejemplo:
 di hola jefe
 
-yaml
-Copiar código
-
 ---
 
 ### 🔮 Modos Visuales (Screensavers)
@@ -222,14 +208,8 @@ izquierda
 derecha
 centro
 
-css
-Copiar código
-
 ⚠️ Para **devolver el control a la IA**:
 auto
-
-yaml
-Copiar código
 
 ---
 
@@ -238,9 +218,6 @@ Copiar código
 **🔒 Candado en los ojos**  
 → Falta contraseña  
 PASS:1234
-
-markdown
-Copiar código
 
 **“ERROR WIFI” / “SIN DATOS”**  
 - Red **2.4 GHz**
@@ -255,9 +232,6 @@ Copiar código
 - Estás en modo manual  
 - Envía:
 auto
-
-yaml
-Copiar código
 
 ---
 
