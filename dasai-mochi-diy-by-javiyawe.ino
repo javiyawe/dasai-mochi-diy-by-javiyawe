@@ -16,7 +16,7 @@
 // 1. CONFIGURACIÓN
 // ==========================================================================
 const char* BLE_NAME      = "MOCHI_YAWE_V43"; 
-const char* BLE_PASSWORD  = "XIMO"; 
+const char* BLE_PASSWORD  = "1234"; 
 
 const char* DEFAULT_SSID     = "";      
 const char* DEFAULT_PASSWORD = ""; 
