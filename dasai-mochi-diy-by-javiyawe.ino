@@ -21,8 +21,9 @@ const char* BLE_PASSWORD  = "1234";
 const char* DEFAULT_SSID     = "";      
 const char* DEFAULT_PASSWORD = ""; 
 
-long  gmtOffset_sec = 3600; 
-int   daylightOffset_sec = 3600; 
+// Zona horaria POSIX para España (CET/CEST con cambio automático)
+// CET-1CEST,M3.5.0/2,M10.5.0/3 = UTC+1, verano UTC+2, cambia último domingo marzo/octubre
+String tzString = "CET-1CEST,M3.5.0/2,M10.5.0/3";
 const bool DEBUG_MODE = false; 
 
 // ==========================================================================
@@ -93,10 +94,15 @@ int currentHour = -1; int currentWDay = -1; int currentMin = -1;
 uint32_t lastTimeSync = 0;
 uint32_t lastDataFetch = 0; 
 
+bool ntpSynced = false;
+bool dataSynced = false;
+String lastSyncError = "";
+
 String ssid = ""; String password = "";
 String realCity = "---";
 float realTemp = 0.0;
-int realWeatherCode = -1; 
+int realWeatherCode = -1;
+int wifiRSSI = 0; 
 
 // Control
 bool manualOverride = false; uint32_t overrideTimer = 0;
@@ -199,9 +205,17 @@ void showFeedback(Mood m, int duration, String msg) {
 }
 
 void fetchRealData() {
-  if (WiFi.status() != WL_CONNECTED) return;
-  HTTPClient http;
+  if (WiFi.status() != WL_CONNECTED) {
+    wifiConnected = false;
+    lastSyncError = "NO WIFI";
+    return;
+  }
   
+  wifiRSSI = WiFi.RSSI();
+  HTTPClient http;
+  http.setTimeout(8000);  // 8 segundos de timeout
+  
+  // --- PASO 1: Obtener ubicación ---
   http.begin("http://ip-api.com/json/?fields=status,city,lat,lon"); 
   int httpCode = http.GET();
   float lat = 0, lon = 0;
@@ -210,58 +224,117 @@ void fetchRealData() {
     String payload = http.getString();
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
-    if (!error) {
+    if (!error && doc["status"] == "success") {
       const char* city = doc["city"];
-      realCity = String(city);
+      if (city != nullptr) {
+        realCity = String(city);
+        if (realCity.length() > 14) realCity = realCity.substring(0, 14);
+      }
       lat = doc["lat"];
       lon = doc["lon"];
-      if (realCity.length() > 9) realCity = realCity.substring(0, 9);
+    } else {
+      lastSyncError = "JSON GEO";
     }
+  } else {
+    lastSyncError = "HTTP GEO:" + String(httpCode);
   }
   http.end();
 
-  if (lat == 0 && lon == 0) return; 
+  if (lat == 0 && lon == 0) {
+    if (lastSyncError == "") lastSyncError = "NO COORDS";
+    return;
+  }
 
-  String url = "http://api.open-meteo.com/v1/forecast?latitude=" + String(lat) + "&longitude=" + String(lon) + "&current_weather=true";
+  // --- PASO 2: Obtener clima ---
+  String url = "http://api.open-meteo.com/v1/forecast?latitude=" + String(lat, 4) + "&longitude=" + String(lon, 4) + "&current_weather=true";
   http.begin(url);
+  http.setTimeout(8000);
   httpCode = http.GET();
   if (httpCode == 200) {
     String payload = http.getString();
     JsonDocument doc;
     DeserializationError error = deserializeJson(doc, payload);
-    if (!error) {
+    if (!error && doc.containsKey("current_weather")) {
       realTemp = doc["current_weather"]["temperature"];
       realWeatherCode = doc["current_weather"]["weathercode"];
+      dataSynced = true;
+      lastSyncError = "";
+    } else {
+      lastSyncError = "JSON METEO";
     }
+  } else {
+    lastSyncError = "HTTP MET:" + String(httpCode);
   }
   http.end();
 }
 
 void connectWifi() {
   wifiConnected = false;
-  if (ssid == "" || ssid == "NULL") { showFeedback(SIN_WIFI, 3000, "SIN DATOS"); return; }
+  if (ssid == "" || ssid == "NULL" || ssid.length() == 0) { showFeedback(SIN_WIFI, 3000, "SIN DATOS"); return; }
 
   currentMood = CONECTANDO; target = getMoodConfig(CONECTANDO);
   u8g2.clearBuffer(); u8g2.setFont(u8g2_font_5x7_tr); u8g2.setDrawColor(1); u8g2.drawStr(35, 62, "CONECTANDO..."); u8g2.sendBuffer();
 
-  WiFi.begin(ssid.c_str(), password.c_str());
-  int retry = 0; while (WiFi.status() != WL_CONNECTED && retry < 20) { delay(500); retry++; }
+  // Desconectar cualquier conexión previa y establecer modo Station
+  WiFi.disconnect(true);  // true = borra credenciales anteriores del driver
+  delay(100);
+  WiFi.mode(WIFI_STA);
+  delay(100);
+
+  // Copiar credenciales a variables locales estables para evitar punteros invalidados
+  String localSSID = ssid;
+  String localPass = password;
+  WiFi.begin(localSSID.c_str(), localPass.c_str());
+  
+  int retry = 0;
+  while (WiFi.status() != WL_CONNECTED && retry < 30) { // 30 reintentos = 15 segundos
+    delay(500);
+    retry++;
+    // Feedback visual de progreso
+    if (retry % 5 == 0) {
+      u8g2.clearBuffer(); u8g2.setFont(u8g2_font_5x7_tr); u8g2.setDrawColor(1);
+      u8g2.drawStr(25, 32, "CONECTANDO...");
+      u8g2.setCursor(55, 45); u8g2.print(retry); u8g2.print("/30");
+      u8g2.sendBuffer();
+    }
+  }
 
   if (WiFi.status() == WL_CONNECTED) {
-    wifiConnected = true; 
-    configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org"); 
+    wifiConnected = true;
+    wifiRSSI = WiFi.RSSI();
     
-    int w = 0; while(time(nullptr) < 100000 && w < 10) { delay(500); w++; }
+    // NTP con zona horaria POSIX (maneja DST automáticamente)
+    configTzTime(tzString.c_str(), "pool.ntp.org", "time.google.com", "time.cloudflare.com"); 
+    
+    // Feedback: sincronizando hora
+    u8g2.clearBuffer(); u8g2.setFont(u8g2_font_5x7_tr); u8g2.setDrawColor(1);
+    u8g2.drawStr(25, 32, "SYNC HORA..."); u8g2.sendBuffer();
+    
+    // Esperar a que NTP sincronice (máx 10 segundos)
+    int w = 0;
+    while(time(nullptr) < 100000 && w < 20) { delay(500); w++; }
+    
     struct tm timeinfo;
-    if(getLocalTime(&timeinfo)){ currentHour=timeinfo.tm_hour; currentMin=timeinfo.tm_min; }
+    if(getLocalTime(&timeinfo, 5000)) {
+      currentHour = timeinfo.tm_hour;
+      currentMin = timeinfo.tm_min;
+      currentWDay = timeinfo.tm_wday;
+      ntpSynced = true;
+    } else {
+      ntpSynced = false;
+      lastSyncError = "NTP FAIL";
+    }
 
+    // Feedback: buscando datos
     currentMood = BUSCANDO_DATOS; target = getMoodConfig(BUSCANDO_DATOS);
     u8g2.clearBuffer(); drawEye(BASE_X_L, EYE_Y, true); drawEye(BASE_X_R, EYE_Y, false);
-    u8g2.drawStr(35, 62, "DATOS..."); u8g2.sendBuffer();
+    u8g2.setFont(u8g2_font_5x7_tr); u8g2.drawStr(30, 62, "BUSCANDO..."); u8g2.sendBuffer();
     
     fetchRealData(); 
-    showFeedback(INFO_SCREEN, 6000, ""); 
+    showFeedback(INFO_SCREEN, 8000, ""); 
   } else {
+    WiFi.disconnect(true);
+    lastSyncError = "CONN FAIL";
     showFeedback(SIN_WIFI, 3000, "ERROR WIFI");
   }
 }
@@ -307,12 +380,37 @@ void processBluetoothCommand() {
     inputBuffer = ""; return;
   }
 
-  // ZONA Y WIFI
+  // ZONA, CIUDAD Y WIFI
   if (lowerCmd.startsWith("zona:")) {
-    int zona = lowerCmd.substring(5).toInt();
-    gmtOffset_sec = zona * 3600;
-    configTime(gmtOffset_sec, daylightOffset_sec, "pool.ntp.org");
+    String tz = cmd.substring(5); tz.trim();
+    // Si solo ponen un número, construir la cadena POSIX básica
+    if (tz.length() <= 3 && (tz.toInt() != 0 || tz == "0")) {
+      int zona = tz.toInt();
+      // Generar POSIX simple sin DST automático
+      if (zona >= 0) {
+        tzString = "UTC-" + String(zona);
+      } else {
+        tzString = "UTC" + String(-zona);
+      }
+    } else {
+      // Aceptar cadena POSIX completa (ej: "CET-1CEST,M3.5.0/2,M10.5.0/3")
+      tzString = tz;
+    }
+    preferences.putString("tz", tzString);
+    configTzTime(tzString.c_str(), "pool.ntp.org", "time.google.com");
+    delay(2000);
+    struct tm timeinfo;
+    if(getLocalTime(&timeinfo, 5000)) {
+      currentHour = timeinfo.tm_hour; currentMin = timeinfo.tm_min;
+      ntpSynced = true;
+    }
     showFeedback(CONFIGURANDO, 2000, "ZONA OK"); inputBuffer = ""; return;
+  }
+
+  if (lowerCmd.startsWith("ciudad:")) {
+    realCity = cmd.substring(7); realCity.trim();
+    if (realCity.length() > 14) realCity = realCity.substring(0, 14);
+    showFeedback(CONFIGURANDO, 2000, "CITY OK"); inputBuffer = ""; return;
   }
 
   if (lowerCmd.startsWith("wifi:")) {
@@ -321,11 +419,12 @@ void processBluetoothCommand() {
       ssid = cmd.substring(5, commaIndex); password = cmd.substring(commaIndex + 1); ssid.trim(); password.trim();
       preferences.putString("ssid", ssid); preferences.putString("pass", password);
       showFeedback(GUARDANDO, 2000, ""); 
-      inputBuffer = "internal_connect"; overrideTimer = millis() + 1500; return; 
+      // Conectar WiFi tras breve pausa para mostrar feedback
+      delay(1500);
+      connectWifi();
+      inputBuffer = ""; return; 
     }
   }
-  
-  if (inputBuffer == "internal_connect" && millis() > (overrideTimer - 500)) { connectWifi(); inputBuffer = ""; return; }
 
   // COMANDOS
   if (lowerCmd == "auto") { manualGaze = false; manualOverride = false; pomodoroActive=false; activeSequence=0; currentMood = NEUTRAL; isAction=false;}
@@ -444,9 +543,24 @@ void runSequences() {
 }
 
 void syncTime() {
-  if (!wifiConnected) return;
+  // Verificar si WiFi sigue conectado
+  if (WiFi.status() != WL_CONNECTED) {
+    wifiConnected = false;
+    ntpSynced = false;
+    return;
+  }
+  wifiConnected = true;
+  wifiRSSI = WiFi.RSSI();
+  
   struct tm timeinfo;
-  if(getLocalTime(&timeinfo)){ currentHour=timeinfo.tm_hour; currentMin=timeinfo.tm_min; currentWDay=timeinfo.tm_wday; }
+  if(getLocalTime(&timeinfo, 5000)) {
+    currentHour = timeinfo.tm_hour;
+    currentMin = timeinfo.tm_min;
+    currentWDay = timeinfo.tm_wday;
+    ntpSynced = true;
+  } else {
+    ntpSynced = false;
+  }
 }
 
 void decideNaturalMood() {
@@ -472,7 +586,10 @@ void decideNaturalMood() {
 
   if (currentWDay == 6 && (currentHour >= 22 || currentHour <= 1)) {
     if (roll < 40) nextMood = MODO_DISCO; else if (roll < 70) nextMood = EUFORICO; else if (roll < 90) nextMood = ENAMORADO; else nextMood = GLITCH; 
-    moodDur = random(3000, 6000); return; 
+    moodDur = random(3000, 6000);
+    currentMood = nextMood;
+    target = getMoodConfig(currentMood);
+    return; 
   }
 
   if (currentHour != -1 && (currentHour >= 23 || currentHour < 7)) { // Noche
@@ -586,7 +703,7 @@ void drawPupil(int x, int y, int sz, PupilType t) {
     case P_CAT: u8g2.drawBox(x-2, y-sz, 5, sz*2); break;
     case P_HEART: u8g2.drawDisc(x-3,y-3,4); u8g2.drawDisc(x+3,y-3,4); u8g2.drawTriangle(x-7,y-1,x+7,y-1,x,y+7); break;
     case P_STAR: u8g2.drawLine(x-sz,y,x+sz,y); u8g2.drawLine(x,y-sz,x,y+sz); u8g2.drawLine(x-sz/2,y-sz/2,x+sz/2,y+sz/2); u8g2.drawLine(x-sz/2,y+sz/2,x+sz/2,y-sz/2); break;
-    case P_SWIRL: { int p=(millis()/60)%6; for(int r=sz;r>2;r-=3) u8g2.drawArc(x,y,r,(p*40)+(r*10),(p*40)+(r*10)+180); } break;
+    case P_SWIRL: { int p=(millis()/60)%16; for(int r=sz;r>2;r-=3) { uint8_t mask = ((p + r) % 15) + 1; u8g2.drawCircle(x,y,r, mask); } } break;
     case P_LINE: u8g2.drawBox(x-sz, y-1, sz*2, 3); break;
     case P_X: u8g2.drawLine(x-sz,y-sz,x+sz,y+sz); u8g2.drawLine(x-sz+1,y-sz,x+sz+1,y+sz); u8g2.drawLine(x+sz,y-sz,x-sz,y+sz); u8g2.drawLine(x+sz-1,y-sz,x-sz-1,y+sz); break;
     case P_FIRE: u8g2.drawTriangle(x,y-sz, x-sz/2,y+sz/2, x+sz/2,y+sz/2); break; 
@@ -641,13 +758,15 @@ void drawEye(int cx, int cy, bool isLeft) {
 // 9. SETUP & LOOP
 // ==========================================================================
 void setup() {
-  Wire.begin(4, 5); u8g2.begin(); u8g2.setContrast(255); 
+  Wire.begin(2, 3); u8g2.begin(); u8g2.setContrast(255); 
   randomSeed(analogRead(0));
   
   // INIT NVS & BLE
   preferences.begin("mochi_config", false);
   ssid = preferences.getString("ssid", DEFAULT_SSID);
   password = preferences.getString("pass", DEFAULT_PASSWORD);
+  String savedTz = preferences.getString("tz", "");
+  if (savedTz.length() > 0) tzString = savedTz;
 
   BLEDevice::init(BLE_NAME);
   pServer = BLEDevice::createServer();
@@ -660,6 +779,10 @@ void setup() {
   pServer->getAdvertising()->start();
 
   for(int i=0; i<128; i++) matrixCols[i] = random(-64, 0);
+
+  // Esperar a que BLE se estabilice antes de intentar WiFi
+  // El ESP32 comparte la antena entre BLE y WiFi, necesita tiempo
+  delay(1000);
 
   // Intentar conectar con lo que haya guardado
   connectWifi();
@@ -679,20 +802,161 @@ void loop() {
     u8g2.setDrawColor(1); u8g2.drawBox(0,0,128,64); 
   }
   else if (currentMood == INFO_SCREEN) {
-    u8g2.setFont(u8g2_font_5x7_tr); u8g2.setDrawColor(1);
-    u8g2.setCursor(5, 10); u8g2.print("WIFI: "); u8g2.print(wifiConnected?"ON":"OFF");
-    u8g2.setCursor(5, 25); u8g2.print("HORA: "); 
-    if(currentHour<10) u8g2.print("0"); u8g2.print(currentHour); u8g2.print(":"); 
-    if(currentMin<10) u8g2.print("0"); u8g2.print(currentMin);
+    u8g2.setDrawColor(1);
+    // Alternar entre 2 páginas cada 4 segundos
+    bool page2 = ((millis() / 4000) % 2) == 1;
     
-    u8g2.setCursor(5, 40); u8g2.print("CITY: "); u8g2.print(realCity);
-    u8g2.setCursor(5, 55); u8g2.print("TEMP: "); u8g2.print(realTemp); u8g2.print("C");
+    if (!page2) {
+      // === PAGINA 1: Estado de conexión ===
+      // Título
+      u8g2.setFont(u8g2_font_5x7_tr);
+      u8g2.drawStr(1, 7, "--- MOCHI INFO ---");
+      u8g2.drawLine(0, 9, 127, 9);
+      
+      // Estado WiFi
+      u8g2.setCursor(1, 19);
+      if (wifiConnected) {
+        u8g2.print("WIFI: ON ("); u8g2.print(wifiRSSI); u8g2.print("dBm)");
+      } else {
+        u8g2.print("WIFI: DESCONECTADO");
+      }
+      
+      // Nombre de la red
+      u8g2.setCursor(1, 29);
+      u8g2.print("RED: ");
+      if (ssid.length() > 0 && ssid != "NULL") {
+        String displaySSID = ssid;
+        if (displaySSID.length() > 17) displaySSID = displaySSID.substring(0, 17);
+        u8g2.print(displaySSID);
+      } else {
+        u8g2.print("(sin config)");
+      }
+      
+      // IP
+      u8g2.setCursor(1, 39);
+      u8g2.print("IP: ");
+      if (wifiConnected) {
+        u8g2.print(WiFi.localIP().toString());
+      } else {
+        u8g2.print("---");
+      }
+      
+      // Hora
+      u8g2.setCursor(1, 49);
+      u8g2.print("HORA: ");
+      if (ntpSynced && currentHour >= 0) {
+        if(currentHour < 10) u8g2.print("0"); u8g2.print(currentHour); u8g2.print(":");
+        if(currentMin < 10) u8g2.print("0"); u8g2.print(currentMin);
+        u8g2.print(" (NTP OK)");
+      } else {
+        u8g2.print("NO SYNC");
+      }
+      
+      // Indicador de página
+      u8g2.setCursor(45, 62); u8g2.print("[1/2] >>>");
+      
+    } else {
+      // === PAGINA 2: Datos del mundo ===
+      u8g2.setFont(u8g2_font_5x7_tr);
+      u8g2.drawStr(1, 7, "--- DATOS SYNC ---");
+      u8g2.drawLine(0, 9, 127, 9);
+      
+      // Ciudad
+      u8g2.setCursor(1, 19);
+      u8g2.print("CITY: "); u8g2.print(realCity);
+      
+      // Temperatura
+      u8g2.setCursor(1, 29);
+      u8g2.print("TEMP: ");
+      if (dataSynced) {
+        u8g2.print(realTemp, 1); u8g2.print(" C");
+      } else {
+        u8g2.print("---");
+      }
+      
+      // Código meteo
+      u8g2.setCursor(1, 39);
+      u8g2.print("METEO: ");
+      if (dataSynced) {
+        u8g2.print("cod "); u8g2.print(realWeatherCode);
+      } else {
+        u8g2.print("---");
+      }
+      
+      // Estado de sync
+      u8g2.setCursor(1, 49);
+      u8g2.print("SYNC: ");
+      if (dataSynced && ntpSynced) {
+        u8g2.print("TODO OK");
+      } else if (lastSyncError.length() > 0) {
+        u8g2.print(lastSyncError);
+      } else {
+        u8g2.print("PENDIENTE");
+      }
+      
+      // BLE
+      u8g2.setCursor(1, 59);
+      u8g2.print("BLE: "); u8g2.print(bleConnected ? "CONECTADO" : "ESPERANDO");
+      
+      // Indicador de página
+      u8g2.setCursor(100, 62); u8g2.print("2/2");
+    }
   }
   else if (currentMood == TEXTO_BLE) {
-    u8g2.setFont(u8g2_font_9x15B_tr);
-    int tw = u8g2.getStrWidth(bleMessage.c_str());
-    u8g2.setDrawColor(1); u8g2.drawStr(64 - tw/2, 35, bleMessage.c_str());
-    u8g2.drawArc(64, 45, 10, 0, 180);
+    u8g2.setDrawColor(1);
+    int len = bleMessage.length();
+    
+    // Elegir fuente seg\u00fan longitud del texto
+    // Pantalla = 128px ancho, 64px alto
+    if (len <= 8) {
+      // Texto corto: fuente grande centrada
+      u8g2.setFont(u8g2_font_9x15B_tr);
+      int tw = u8g2.getStrWidth(bleMessage.c_str());
+      u8g2.drawStr(64 - tw/2, 40, bleMessage.c_str());
+    }
+    else if (len <= 14) {
+      // Texto medio: fuente media centrada
+      u8g2.setFont(u8g2_font_7x14B_tr);
+      int tw = u8g2.getStrWidth(bleMessage.c_str());
+      u8g2.drawStr(64 - tw/2, 40, bleMessage.c_str());
+    }
+    else {
+      // Texto largo: fuente peque\u00f1a con word-wrap multi-l\u00ednea
+      u8g2.setFont(u8g2_font_5x7_tr);
+      int maxCharsPerLine = 25; // 128px / 5px = ~25 chars
+      int maxLines = 7;         // 64px / 9px = ~7 lines
+      int lineHeight = 9;
+      
+      // Dividir en l\u00edneas
+      String lines[7];
+      int lineCount = 0;
+      String remaining = bleMessage;
+      
+      while (remaining.length() > 0 && lineCount < maxLines) {
+        if ((int)remaining.length() <= maxCharsPerLine) {
+          lines[lineCount++] = remaining;
+          remaining = "";
+        } else {
+          // Buscar espacio para cortar por palabra
+          int cutPos = maxCharsPerLine;
+          for (int i = maxCharsPerLine; i >= maxCharsPerLine/2; i--) {
+            if (remaining.charAt(i) == ' ') { cutPos = i; break; }
+          }
+          lines[lineCount++] = remaining.substring(0, cutPos);
+          remaining = remaining.substring(cutPos);
+          remaining.trim();
+        }
+      }
+      
+      // Centrar verticalmente el bloque de texto
+      int totalHeight = lineCount * lineHeight;
+      int startY = (64 - totalHeight) / 2 + lineHeight; // +lineHeight porque drawStr dibuja desde baseline
+      
+      for (int i = 0; i < lineCount; i++) {
+        int tw = u8g2.getStrWidth(lines[i].c_str());
+        u8g2.drawStr(64 - tw/2, startY + i * lineHeight, lines[i].c_str());
+      }
+    }
   }
   else if (currentMood == MODO_MATRIX) {
     u8g2.setDrawColor(1); u8g2.setFont(u8g2_font_micro_tr);
