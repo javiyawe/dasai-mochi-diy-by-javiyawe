@@ -1,247 +1,298 @@
-# 🤖 Mochi Bot V43 by javiyawe (ESP32-C6)
-### AI Desktop Companion · Non-Stop Living Device
+# 🤖 Mochi Bot V43 — Ultra Version
 
-**Mochi Bot** es un compañero de escritorio *vivo* basado en el microcontrolador **ESP32-C6**.  
-No es una simple pantalla con ojos: es una **mascota digital autónoma** con biorritmos, conexión a internet para datos reales (hora y clima) y control total vía Bluetooth.
-
-La versión **V43** introduce el concepto **Non-Stop AI**:  
-👉 Mochi **nunca deja de “vivir”**.  
-Parpadea, respira, mira y reacciona **incluso mientras estás conectado por Bluetooth o enviando comandos**.
+### AI Desktop Companion · ESP32-C6 · by javiyawe
 
 ---
 
-## ✨ Características Principales
+**Mochi Bot** es un compañero de escritorio *vivo* basado en **ESP32-C6**. Una mascota digital autónoma con biorritmos reales, conexión a internet (hora NTP + clima), control total vía Bluetooth BLE y más de **40 expresiones y modos visuales**.
 
-### 🧠 IA Biológica Autónoma
-- **Ciclo Día / Noche**
-  - 🌙 Se duerme automáticamente (23:00 – 07:00)
-  - 🌅 Se despierta cansado por la mañana
-- **Clima real**
-  - Geolocalización por IP
-  - Cambia de ánimo si llueve, hay viento o tormenta
-- **Comportamiento aleatorio**
-  - Durante el día alterna entre curiosidad, felicidad y aburrimiento
+La versión **V43 Ultra** introduce:
+
+- 🧠 **Non-Stop AI** — Mochi nunca deja de vivir. Parpadea, respira y reacciona incluso mientras envías comandos BLE.
+- 🕐 **Zona horaria POSIX** — Cambio automático de horario verano/invierno (configurable para cualquier país).
+- 📺 **Pantalla INFO** de 2 páginas con estado completo del dispositivo.
+- 💬 **Texto adaptativo** — El comando `di` auto-escala la fuente y hace word-wrap.
 
 ---
 
-### 📡 Conectividad Híbrida
-- **WiFi One-Shot**
-  - Configuración con un solo comando
-  - Si pierde WiFi → sigue funcionando offline
-- **Bluetooth seguro**
-  - Desbloqueo por contraseña (`PASS:1234`)
-  - Las animaciones **no se detienen** al usar BLE
+## 🔧 Hardware Necesario
 
----
+| Componente | Detalle |
+|---|---|
+| **ESP32-C6** | WiFi 6 + BLE 5.0 |
+| **Pantalla OLED SSD1306** | I2C, 128×64, 0.96" o 1.3" |
 
-### 🎨 Motor Gráfico “Smooth Eyes”
-- Renderizado vectorial
-- Bordes redondeados (radio 8)
-- Parpadeo orgánico
-- Ojos suaves, vivos y expresivos
-
----
-
-### 🛠️ Apps Integradas
-- ⏱ **Pomodoro** (25 min)
-- 🔔 **Notificaciones** (simuladas: WhatsApp / Email)
-- 💬 **Mensajería** (texto desde el móvil)
-- 🔦 **Linterna** (pantalla blanca al 100 %)
-
----
-
-## 🔧 Requisitos de Hardware
-
-Solo necesitas **dos componentes**:
-
-- **ESP32-C6**
-  - Recomendado por WiFi 6 y BLE 5.0
-- **Pantalla OLED I2C SSD1306**
-  - 0.96” o 1.3”
-  - Resolución: 128×64
-
----
-
-## 🔌 Conexión (Wiring)
+### Conexión (Wiring)
 
 | ESP32-C6 | OLED |
-|--------|------|
+|---|---|
 | 3.3V / 5V | VCC |
 | GND | GND |
-| GPIO 4 | SDA |
-| GPIO 5 | SCL |
+| GPIO 2 | SDA |
+| GPIO 3 | SCL |
 
 ---
 
-## 💻 Instalación y Carga
+## 💻 Instalación
 
-### 1️⃣ Preparar Arduino IDE
-Instala desde el Gestor de Librerías:
+### 1. Preparar Arduino IDE
 
-- `U8g2` (Oliver Kraus) → gráficos
-- `ArduinoJson` (Benoit Blanchon) → **imprescindible para el clima**
-- **ESP32 Board Definitions** (v3.0.0 o superior)
+Instala desde el **Gestor de Librerías**:
 
----
+| Librería | Autor | Uso |
+|---|---|---|
+| `U8g2` | Oliver Kraus | Gráficos OLED |
+| `ArduinoJson` | Benoit Blanchon | Parsing de datos clima/geolocalización |
 
-### 2️⃣ Configuración de la Placa ⚠️ IMPORTANTE
-Para que el código quepa:
+Instala desde el **Gestor de Placas**:
 
-- **Board:** `ESP32C6 Dev Module`
-- **Partition Scheme:**
-Huge APP (3MB No OTA / 1MB SPIFFS)
+- **ESP32** de Espressif (v3.0.0 o superior)
 
-Si no haces esto → **no compila**.
+### 2. Configuración de la Placa ⚠️ IMPORTANTE
 
----
+| Opción | Valor |
+|---|---|
+| **Board** | `ESP32C6 Dev Module` |
+| **Partition Scheme** | `Huge APP (3MB No OTA / 1MB SPIFFS)` |
 
-### 3️⃣ Subir el Código
-Carga el archivo:
+> Si no seleccionas este esquema de partición, **no compilará** (el código con BLE + WiFi + gráficos es grande).
 
-DasaiEyes_V43_TrulyAlive.ino
+### 3. Subir el código
 
----
-
-## 🚀 Manual de Usuario
-
-### 1️⃣ Primer Arranque (Configurar WiFi)
-Al encender por primera vez:
-- Mochi intenta conectarse
-- Como no tiene WiFi → cara triste (`SIN DATOS`)
-
-Pasos:
-
-1. Abre una app de terminal Bluetooth  
-   (ej: *Serial Bluetooth Terminal*)
-   
-2. Conecta a:
-MOCHI_YAWE_V43
-
-3. Mochi muestra 🔒 (bloqueado)
-
-4. Desbloquea:
-PASS:1234
-
-5. Configura WiFi:
-wifi:NombreDeTuRed,TuContraseña
-
-Mochi guarda los datos, se reinicia y, si todo va bien, muestra **ciudad y temperatura**.
+Abre y carga el archivo `ultraversion.ino` desde Arduino IDE.
 
 ---
 
-### 2️⃣ Uso Diario
-- Solo conéctalo por USB
-- Mochi es **autónomo**
-- Se duerme solo por la noche
-- Usa `info` si quieres comprobar su estado
+## 🚀 Primer Arranque
+
+Al encender por primera vez, Mochi **no tiene WiFi configurado**, así que mostrará cara triste con `SIN DATOS`.
+
+### Configurar WiFi vía Bluetooth
+
+1. **Descarga una app BLE** en tu móvil:
+   - [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp) (recomendada)
+   - Serial Bluetooth Terminal
+   - BLE Terminal
+
+2. **Busca y conecta** al dispositivo:
+   ```
+   MOCHI_YAWE_V43
+   ```
+
+3. Mochi muestra 🔒 candado. **Desbloquea** enviando:
+   ```
+   PASS:1234
+   ```
+
+4. **Configura tu WiFi** (separado por coma):
+   ```
+   wifi:NombreDeTuRed,TuContraseña
+   ```
+   > ✅ Los espacios en el nombre del WiFi funcionan bien. El separador es la coma.
+
+5. Mochi guardará los datos, conectará y mostrará la pantalla de INFO con hora, ciudad y temperatura.
+
+> Las credenciales se guardan en **memoria NVS** y sobreviven a reinicios. No necesitas reconfigurar cada vez.
 
 ---
 
-## 🎮 Lista de Comandos Bluetooth
+## 🧠 Comportamiento Autónomo (IA)
 
-> Requiere conexión BLE + contraseña correcta
+Mochi tiene un "cerebro" que decide su estado emocional de forma autónoma basándose en:
 
----
+| Factor | Comportamiento |
+|---|---|
+| **Hora del día** | 🌙 Se duerme (23:00–07:00), 🌅 se despierta cansado (07:00–10:00), activo el resto |
+| **Día de la semana** | 🎉 Los sábados noche (22:00–01:00) entra en modo fiesta |
+| **Clima real** | ☀️ Contento si sol, 🌧 triste si llueve, ⛈ asustado si tormenta |
+| **Aleatoriedad** | Alterna entre curiosidad, felicidad, aburrimiento, guiños y más |
 
-### 🎭 Expresiones (5 s)
-Fuerzan una emoción temporal y luego vuelven a automático.
+### Datos en tiempo real
 
-| Comando | Expresión |
-|------|----------|
-| `feliz` | 😊 Sonrisa |
-| `triste` | 😢 Lágrimas |
-| `enfadado` | 😠 |
-| `amor` | 😍 |
-| `sorpresa` | 😮 |
-| `neutro` | 😐 |
-| `dormir` | 😴 (30 s) |
-| `dinero` | 🤑 |
-| `glitch` | 👾 |
-| `loco` | 😵 |
-| `coqueto` | 😉 |
-| `tierno` | 🥺 |
-| `sospecha` | 😑 |
-| `esceptico` | 🤨 |
+- **Hora**: Sincronizada por NTP con cambio automático verano/invierno (zona POSIX).
+- **Clima**: Geolocalización por IP + API de Open-Meteo (temperatura y código meteorológico).
+- **Actualización**: Los datos se refrescan cada 30 minutos automáticamente.
 
 ---
 
-### 🎬 Secuencias (Animaciones)
-- `susto`
-- `broma`
-- `detective`
-- `llorar`
-- `estornudo`
-- `risa`
+## 📺 Pantalla INFO (2 páginas)
+
+Al enviar el comando `info`, la pantalla alterna automáticamente entre dos páginas cada 4 segundos:
+
+### Página 1 — Estado de conexión
+```
+--- MOCHI INFO ---
+WIFI: ON (-65dBm)
+RED: MiWiFiCasa
+IP: 192.168.1.45
+HORA: 16:45 (NTP OK)
+[1/2] >>>
+```
+
+### Página 2 — Datos del mundo
+```
+--- DATOS SYNC ---
+CITY: Valencia
+TEMP: 18.5 C
+METEO: cod 3
+SYNC: TODO OK
+BLE: CONECTADO       2/2
+```
+
+> Si algo falla, en `SYNC:` verás el código de error exacto (ej: `HTTP GEO:-1`, `NTP FAIL`, `JSON METEO`).
 
 ---
+
+## 🎮 Comandos Bluetooth (BLE)
+
+> ⚠️ Todos los comandos requieren estar conectado por BLE y haber enviado `PASS:1234` primero.
+
+### ⚙️ Configuración
+
+| Comando | Descripción |
+|---|---|
+| `PASS:1234` | Desbloquear Mochi (obligatorio al conectar) |
+| `wifi:SSID,PASSWORD` | Configurar WiFi (se guarda en memoria) |
+| `zona:1` | Zona horaria UTC+1 (sin DST automático) |
+| `zona:CET-1CEST,M3.5.0/2,M10.5.0/3` | Zona España con DST automático (por defecto) |
+| `ciudad:Valencia` | Establecer ciudad manualmente |
 
 ### 🛠️ Utilidades
-- `info` → WiFi, IP, hora, ciudad, temperatura
-- `clima` → fuerza actualización
-- `luz` → linterna (1 min)
-- `pomodoro` → 25 min
-- `stop` → cancela cualquier modo
-- `di [texto]` → muestra texto
+
+| Comando | Descripción |
+|---|---|
+| `info` | Pantalla de estado completa (2 páginas) |
+| `clima` | Forzar actualización de datos meteorológicos |
+| `di [texto]` | Mostrar texto en pantalla (auto-escala la fuente) |
+| `luz` | Linterna (pantalla blanca, 1 minuto) |
+| `pomodoro` | Temporizador de 25 minutos |
+| `stop` | Cancelar cualquier modo activo |
+| `auto` | Devolver el control a la IA |
+
+#### Texto adaptativo (`di`)
+
+El texto se ajusta automáticamente al tamaño de la pantalla:
+
+| Longitud | Comportamiento |
+|---|---|
+| ≤ 8 caracteres | Fuente grande, centrada |
+| 9–14 caracteres | Fuente media, centrada |
+| 15+ caracteres | Fuente pequeña con word-wrap multilínea (hasta 7 líneas) |
 
 Ejemplo:
+```
 di hola jefe
+di este es un mensaje largo que se adapta solo
+```
 
----
+### 🎭 Expresiones (duración: 5 segundos)
 
-### 🔮 Modos Visuales (Screensavers)
-- `matrix`
-- `disco` / `fiesta`
-- `escaner`
-- `gamer`
-- `crypto`
-- `latido`
-- `pingpong`
+| Comando | Expresión | Comando | Expresión |
+|---|---|---|---|
+| `feliz` | 😊 Sonrisa | `triste` | 😢 Tristeza |
+| `enfadado` | 😠 Enfado | `amor` | 😍 Enamorado |
+| `sorpresa` | 😮 Sorprendido | `neutro` | 😐 Normal |
+| `coqueto` | 😏 Coqueto | `tierno` | 🥺 Ojos grandes |
+| `loco` | 😵 Locura | `enfermo` | 🤢 Enfermo |
+| `dinero` | 🤑 Signos de dólar | `asco` | 🤮 Disgustado |
+| `sospecha` | 🕵️ Sospechoso | `esceptico` | 🤨 Escéptico |
+| `cansado` | 😩 Agotado | `muerto` | 💀 Muerto |
+| `glitch` | 👾 Efecto glitch | `dormir` | 😴 Dormido (30 seg) |
 
----
+### 🎬 Secuencias Animadas (~10 segundos)
 
-### 🕹️ Control Manual (Joystick)
-Mueve los ojos manualmente:
+| Comando | Animación |
+|---|---|
+| `susto` | Asustado → tiembla → enfadado |
+| `broma` | Eufórico → guiño |
+| `detective` | Sospechoso → linterna |
+| `llorar` | Triste → llanto |
+| `estornudo` | Ojos cerrados → estornudo → confundido |
+| `risa` | Párpados temblando rápido |
 
-arriba
-abajo
-izquierda
-derecha
-centro
+### 🔮 Modos Visuales (8 segundos)
 
-⚠️ Para **devolver el control a la IA**:
-auto
+| Comando | Efecto |
+|---|---|
+| `disco` / `fiesta` | Parpadeo estroboscópico con ojos |
+| `matrix` / `hacker` | Lluvia de código estilo Matrix |
+| `crypto` | Flechas arriba/abajo |
+| `gamer` | Glitch visual |
+| `escaner` | Escaneo horizontal |
+| `carga` | Barra de progreso en las pupilas |
+| `latido` | Pupilas pulsando como corazón |
+| `pingpong` | Ojos rebotando lateralmente |
+
+### 🔔 Notificaciones (4 segundos)
+
+| Comando | Icono |
+|---|---|
+| `whatsapp` | 💬 Chat |
+| `email` | ✉️ Correo |
+| `alerta` | ⚠️ Alerta |
+
+### 🕹️ Joystick (control de mirada)
+
+| Comando | Dirección |
+|---|---|
+| `arriba` | ⬆️ |
+| `abajo` | ⬇️ |
+| `izquierda` | ⬅️ |
+| `derecha` | ➡️ |
+| `centro` | 🎯 |
+| `auto` | 🤖 Devolver control a la IA |
 
 ---
 
 ## ❓ Solución de Problemas
 
-**🔒 Candado en los ojos**  
-→ Falta contraseña  
+### 🔒 Los ojos muestran un candado
+→ Falta enviar la contraseña:
+```
 PASS:1234
+```
 
-**“ERROR WIFI” / “SIN DATOS”**  
-- Red **2.4 GHz**
-- Contraseña correcta
-- Reenvía `wifi:...`
+### "ERROR WIFI" o "SIN DATOS"
+- Asegúrate de que tu red es **2.4 GHz** (el ESP32-C6 no soporta 5 GHz para WiFi 4)
+- Verifica que la contraseña es correcta
+- Envía de nuevo: `wifi:NombreDeTuRed,TuContraseña`
+- Usa `info` para ver el error exacto en la línea `SYNC:`
 
-**Temperatura incorrecta**  
-- Geolocalización por IP imprecisa  
-- Espera 30 min o usa `clima`
+### La hora sale mal
+- Por defecto usa zona horaria de **España** (CET/CEST con cambio automático)
+- Si estás en otro país, cambia la zona: `zona:0` (UTC), `zona:-5` (Colombia), etc.
+- Usa `info` y comprueba que dice `NTP OK`
 
-**Ojos bloqueados**  
-- Estás en modo manual  
-- Envía:
-auto
+### La ciudad no es correcta
+- La geolocalización por IP no es precisa (depende de tu proveedor de internet)
+- Ponla manualmente: `ciudad:Valencia`
+
+### Los ojos no se mueven
+- Estás en modo manual. Envía: `auto`
+
+### No compila
+- Verifica que tienes seleccionado **Huge APP (3MB No OTA / 1MB SPIFFS)** como Partition Scheme
+- Verifica que tienes las librerías `U8g2` y `ArduinoJson` instaladas
+
+---
+
+## 🔐 Seguridad
+
+- Al conectar por BLE, Mochi se **bloquea automáticamente**
+- Requiere contraseña (`PASS:1234`) para aceptar cualquier comando
+- Al desconectar BLE, vuelve a bloquearse
+- La contraseña se puede cambiar en el código (variable `BLE_PASSWORD`)
 
 ---
 
 ## 🧠 Filosofía del Proyecto
-Mochi no quiere ser útil.  
+
+Mochi no quiere ser útil.
 Quiere **sentirse vivo**.
 
-Si algún día no te juzga con la mirada…  
+Si algún día no te juzga con la mirada…
 algo ha fallado.
 
 ---
 
-🧪 Proyecto experimental · ESP32 · IoT · IA con personalidad  
+`🧪 ESP32-C6 · IoT · BLE · NTP · Open-Meteo · IA con personalidad · by javiyawe`
